@@ -142,14 +142,12 @@ echo "" > $LOGFILE
 
 for dim in $(seq $MINDIM $STEP $MAXDIM); do
 
+    start_iter=$(date +%s)
+
     bar="############################${dim//[0-9]/'#'}${MAXDIM//[0-9]/'#'}"
 
-    # Make output subdirectory
     outsubdir=$OUTDIR/ica_runs/$dim
-
-    if [ ! -f $outsubdir ]; then
-        mkdir -p $outsubdir
-    fi
+    mkdir -p $outsubdir
 
     redirect_cmd echo ""
     redirect_cmd echo $bar
@@ -157,11 +155,23 @@ for dim in $(seq $MINDIM $STEP $MAXDIM); do
     redirect_cmd echo $bar
     redirect_cmd echo ""
 
-    redirect_cmd mpiexec -n $CORES python -u -m mpi4py random_restart_ica.py -f $FILE -i $ITER -o $outsubdir -t $TOL -d $dim -time $TIMEOUT 2>&1
-    redirect_cmd mpiexec -n $CORES python -u adjust_csv_MPI.py -o $outsubdir -n $CORES 2>&1
-    redirect_cmd mpiexec -n $CORES python -u -m mpi4py compute_distance.py -i $ITER -o $outsubdir 2>&1
-    redirect_cmd mpiexec -n $CORES python -u -m mpi4py cluster_components.py -i $ITER -o $outsubdir 2>&1
-    
+    redirect_cmd mpiexec --use-hwthread-cpus --oversubscribe -n $CORES python -u -m mpi4py random_restart_ica.py -f $FILE -i $ITER -o $outsubdir -t $TOL -d $dim -time $TIMEOUT 2>&1
+    redirect_cmd mpiexec --use-hwthread-cpus --oversubscribe -n $CORES python -u adjust_csv_MPI.py -o $outsubdir -n $CORES 2>&1
+    redirect_cmd mpiexec --use-hwthread-cpus --oversubscribe -n $CORES python -u -m mpi4py compute_distance.py -i $ITER -o $outsubdir 2>&1
+    redirect_cmd mpiexec --use-hwthread-cpus --oversubscribe -n $CORES python -u -m mpi4py cluster_components.py -i $ITER -o $outsubdir 2>&1
+
+    end_iter=$(date +%s)
+    elapsed=$((end_iter - start_iter))
+
+    # Report iteration time
+    if [ "$elapsed" -lt 60 ]; then
+        redirect_cmd echo "Iteration time for dim=$dim: ${elapsed} seconds"
+    elif [ "$elapsed" -lt 3600 ]; then
+        redirect_cmd echo "Iteration time for dim=$dim: $(awk "BEGIN {print $elapsed/60.0}") minutes"
+    else
+        redirect_cmd echo "Iteration time for dim=$dim: $(awk "BEGIN {print $elapsed/3600.0}") hours"
+    fi
+
     redirect_cmd echo ""
 
 done
